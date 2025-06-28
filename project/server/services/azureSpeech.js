@@ -1,4 +1,11 @@
 import * as sdk from 'microsoft-cognitiveservices-speech-sdk';
+import ffmpeg from 'fluent-ffmpeg';
+import ffmpegStatic from 'ffmpeg-static';
+import { Readable } from 'stream';
+import { promisify } from 'util';
+
+// Set ffmpeg path
+ffmpeg.setFfmpegPath(ffmpegStatic);
 
 export class AzureSpeechService {
   constructor() {
@@ -24,24 +31,68 @@ export class AzureSpeechService {
     }
   }
 
+  async convertWebmToWav(webmBuffer) {
+    return new Promise((resolve, reject) => {
+      console.log('🔄 Converting WebM to WAV for Azure Speech API');
+      
+      const chunks = [];
+      const inputStream = new Readable();
+      inputStream.push(webmBuffer);
+      inputStream.push(null);
+
+      ffmpeg(inputStream)
+        .inputFormat('webm')
+        .audioCodec('pcm_s16le')
+        .audioFrequency(16000)
+        .audioChannels(1)
+        .format('wav')
+        .on('error', (err) => {
+          console.error('❌ FFmpeg conversion error:', err);
+          reject(new Error(`Audio conversion failed: ${err.message}`));
+        })
+        .on('end', () => {
+          console.log('✅ WebM to WAV conversion completed');
+          const wavBuffer = Buffer.concat(chunks);
+          resolve(wavBuffer);
+        })
+        .pipe()
+        .on('data', (chunk) => {
+          chunks.push(chunk);
+        });
+    });
+  }
+
   async transcribeAudio(audioBuffer, language = 'fa-IR', audioFormat = 'webm') {
     if (!this.speechConfig) {
       throw new Error('Azure Speech client not initialized');
     }
 
     try {
-      console.log('🔄 Azure Speech: Processing audio buffer of size:', audioBuffer.length); // Debug log
+      console.log('🔄 Azure Speech: Processing audio buffer of size:', audioBuffer.length);
       
       // Set language
       this.speechConfig.speechRecognitionLanguage = language;
       
+      let processedBuffer = audioBuffer;
+      
+      // Convert WebM to WAV if needed
+      if (audioFormat === 'webm') {
+        try {
+          processedBuffer = await this.convertWebmToWav(audioBuffer);
+          console.log('✅ Audio converted from WebM to WAV, new size:', processedBuffer.length);
+        } catch (conversionError) {
+          console.error('❌ Audio conversion failed:', conversionError);
+          throw new Error(`Audio format conversion failed: ${conversionError.message}`);
+        }
+      }
+      
       // Create audio config from buffer
-      const audioConfig = sdk.AudioConfig.fromWavFileInput(audioBuffer);
+      const audioConfig = sdk.AudioConfig.fromWavFileInput(processedBuffer);
       
       // Create recognizer
       const recognizer = new sdk.SpeechRecognizer(this.speechConfig, audioConfig);
       
-      console.log(`🎤 Azure Speech: Processing ${audioBuffer.length} bytes of ${audioFormat} audio`);
+      console.log(`🎤 Azure Speech: Processing ${processedBuffer.length} bytes of converted audio`);
 
       return new Promise((resolve, reject) => {
         recognizer.recognizeOnceAsync(
@@ -50,7 +101,7 @@ export class AzureSpeechService {
               reason: result.reason,
               text: result.text,
               resultId: result.resultId
-            }); // Debug log
+            });
             
             if (result.reason === sdk.ResultReason.RecognizedSpeech) {
               const finalResult = {
@@ -58,17 +109,17 @@ export class AzureSpeechService {
                 confidence: result.properties?.getProperty(sdk.PropertyId.SpeechServiceResponse_JsonResult) ? 0.9 : 0.7,
                 detectedLanguage: language
               };
-              console.log('✅ Azure Speech final result:', finalResult); // Debug log
+              console.log('✅ Azure Speech final result:', finalResult);
               resolve(finalResult);
             } else if (result.reason === sdk.ResultReason.NoMatch) {
-              console.log('⚠️ Azure Speech: No match found'); // Debug log
+              console.log('⚠️ Azure Speech: No match found');
               resolve({
                 transcript: '',
                 confidence: 0,
                 detectedLanguage: language
               });
             } else {
-              console.error('❌ Azure Speech recognition failed:', result.errorDetails); // Debug log
+              console.error('❌ Azure Speech recognition failed:', result.errorDetails);
               reject(new Error(`Azure Speech recognition failed: ${result.errorDetails}`));
             }
             recognizer.close();

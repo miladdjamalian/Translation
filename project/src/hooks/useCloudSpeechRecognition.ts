@@ -14,6 +14,7 @@ export const useCloudSpeechRecognition = (language: string, provider: 'google' |
   const processingTimeoutRef = useRef<NodeJS.Timeout>();
   const sessionIdRef = useRef<string>('');
   const accumulatedTranscriptRef = useRef<string>('');
+  const isProcessingRef = useRef<boolean>(false);
 
   const getLanguageCode = (lang: string) => {
     const languageCodes: Record<string, string> = {
@@ -77,18 +78,27 @@ export const useCloudSpeechRecognition = (language: string, provider: 'google' |
   };
 
   const processAudioChunk = useCallback(async (audioBlob: Blob) => {
-    if (!audioBlob || audioBlob.size === 0) return;
+    if (!audioBlob || audioBlob.size === 0) {
+      console.log('⚠️ Empty audio blob, skipping'); // Debug log
+      return;
+    }
 
+    if (isProcessingRef.current) {
+      console.log('⚠️ Already processing, skipping chunk'); // Debug log
+      return;
+    }
+
+    isProcessingRef.current = true;
     setIsProcessing(true);
     
     try {
+      console.log('📤 Sending audio chunk to backend:', audioBlob.size, 'bytes, provider:', provider, 'language:', getLanguageCode(language)); // Debug log
+      
       const formData = new FormData();
       formData.append('audio', audioBlob, 'audio.webm');
       formData.append('provider', provider);
       formData.append('language', getLanguageCode(language));
       formData.append('audioFormat', 'webm');
-
-      console.log(`🎤 Sending ${audioBlob.size} bytes to ${provider} Speech API`);
 
       const response = await apiRequest(API_ENDPOINTS.SPEECH_TRANSCRIBE, {
         method: 'POST',
@@ -96,11 +106,16 @@ export const useCloudSpeechRecognition = (language: string, provider: 'google' |
         signal: AbortSignal.timeout(TIMEOUTS.SPEECH_REQUEST)
       });
 
+      console.log('📥 Speech API response status:', response.status, response.ok); // Debug log
+
       if (!response.ok) {
-        throw new Error(`Speech API error: ${response.statusText}`);
+        const errorText = await response.text();
+        console.error('❌ Speech API error response:', errorText); // Debug log
+        throw new Error(`Speech API error: ${response.statusText} - ${errorText}`);
       }
 
       const result = await response.json();
+      console.log('📋 Speech API result:', result); // Debug log
       
       if (result.transcript && result.transcript.trim()) {
         console.log(`✅ ${provider} Speech result:`, result.transcript);
@@ -111,17 +126,22 @@ export const useCloudSpeechRecognition = (language: string, provider: 'google' |
         setTranscript(accumulatedTranscriptRef.current);
         setConfidence(result.confidence || 0);
         setInterimTranscript('');
+      } else {
+        console.log('⚠️ No transcript in result or empty transcript'); // Debug log
       }
 
     } catch (error) {
       console.error(`❌ ${provider} Speech API error:`, error);
     } finally {
       setIsProcessing(false);
+      isProcessingRef.current = false;
     }
   }, [language, provider]);
 
   const startListening = useCallback(async () => {
     try {
+      console.log('🎤 Starting cloud speech recognition for language:', getLanguageCode(language), 'provider:', provider); // Debug log
+      
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
           echoCancellation: true,
@@ -131,25 +151,50 @@ export const useCloudSpeechRecognition = (language: string, provider: 'google' |
         }
       });
       
+      console.log('✅ Got media stream for speech recognition:', stream); // Debug log
+      
       streamRef.current = stream;
       sessionIdRef.current = Date.now().toString();
       accumulatedTranscriptRef.current = '';
       
+      // Check supported MIME types
+      const supportedTypes = [
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/mp4',
+        'audio/wav'
+      ];
+      
+      let mimeType = 'audio/webm';
+      for (const type of supportedTypes) {
+        if (MediaRecorder.isTypeSupported(type)) {
+          mimeType = type;
+          break;
+        }
+      }
+      
+      console.log('🎵 Using MIME type for speech recognition:', mimeType); // Debug log
+      
       const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm;codecs=opus'
+        mimeType: mimeType
       });
       
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
       
-      // Process audio in smaller chunks for better real-time experience
+      // Process audio in chunks for real-time experience
       mediaRecorder.ondataavailable = (event) => {
+        console.log('📊 MediaRecorder data available:', event.data.size, 'bytes'); // Debug log
+        
         if (event.data.size > 0) {
           audioChunksRef.current.push(event.data);
           
           // Process chunk immediately for real-time experience
-          const audioBlob = new Blob([event.data], { type: 'audio/webm' });
+          const audioBlob = new Blob([event.data], { type: mimeType });
+          console.log('🔄 Processing audio chunk:', audioBlob.size, 'bytes'); // Debug log
           processAudioChunk(audioBlob);
+        } else {
+          console.log('⚠️ Received empty data chunk'); // Debug log
         }
       };
       
@@ -158,7 +203,7 @@ export const useCloudSpeechRecognition = (language: string, provider: 'google' |
         setTranscript('');
         setInterimTranscript('');
         accumulatedTranscriptRef.current = '';
-        console.log(`🎤 ${provider} Speech recognition started`);
+        console.log(`🔴 ${provider} Speech recognition started`);
       };
       
       mediaRecorder.onstop = () => {
@@ -166,22 +211,33 @@ export const useCloudSpeechRecognition = (language: string, provider: 'google' |
         console.log(`🛑 ${provider} Speech recognition stopped`);
       };
       
+      mediaRecorder.onerror = (event) => {
+        console.error('❌ MediaRecorder error:', event); // Debug log
+        setIsListening(false);
+      };
+      
       // Start recording with smaller time slices for better real-time processing
-      mediaRecorder.start(800); // 800ms chunks for faster processing
+      console.log('🔴 Starting MediaRecorder with 1000ms chunks'); // Debug log
+      mediaRecorder.start(1000); // 1000ms chunks for better processing
       
     } catch (error) {
-      console.error('Failed to start cloud speech recognition:', error);
+      console.error('❌ Failed to start cloud speech recognition:', error);
       throw error;
     }
   }, [language, provider, processAudioChunk]);
 
   const stopListening = useCallback(() => {
+    console.log('🛑 Stopping cloud speech recognition'); // Debug log
+    
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
     }
     
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current.getTracks().forEach(track => {
+        track.stop();
+        console.log('🔇 Speech recognition track stopped:', track.label); // Debug log
+      });
     }
     
     if (processingTimeoutRef.current) {
@@ -190,6 +246,7 @@ export const useCloudSpeechRecognition = (language: string, provider: 'google' |
     
     setIsListening(false);
     setInterimTranscript('');
+    isProcessingRef.current = false;
   }, []);
 
   // Cleanup on unmount

@@ -1,0 +1,34 @@
+# Render.com Configuration File
+# این فایل تنظیمات استقرار برای Render.com را مشخص می‌کند
+
+services:
+  # Backend Service
+  - type: web
+    name: audio-translator-backend
+    env: node
+    plan: starter # یا free برای شروع
+    buildCommand: npm install
+    startCommand: npm run server
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      # متغیرهای زیر باید در داشبورد Render تنظیم شوند
+      # GOOGLE_CLOUD_PROJECT_ID
+      # GOOGLE_CLOUD_PRIVATE_KEY  
+      # GOOGLE_CLOUD_CLIENT_EMAIL
+      # AZURE_SPEECH_KEY
+      # AZURE_SPEECH_REGION
+      # AZURE_TRANSLATOR_KEY
+      # AZURE_TRANSLATOR_REGION
+      # FRONTEND_URL (URL فرانت‌اند مستقر شده)
+    
+    # تنظیمات Health Check
+    healthCheckPath: /health
+    
+    # تنظیمات Auto-Deploy
+    autoDeploy: true
+    
+    # منطقه سرور (انتخاب بهترین منطقه برای کاربران شما)
+    region: oregon # یا singapore برای کاربران آسیایی

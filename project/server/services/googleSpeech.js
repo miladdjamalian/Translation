@@ -3,16 +3,22 @@ import { SpeechClient } from '@google-cloud/speech';
 export class GoogleCloudSpeechService {
   constructor() {
     if (process.env.GOOGLE_CLOUD_PROJECT_ID) {
-      this.client = new SpeechClient({
-        projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
-        credentials: {
-          client_email: process.env.GOOGLE_CLOUD_CLIENT_EMAIL,
-          private_key: process.env.GOOGLE_CLOUD_PRIVATE_KEY?.replace(/\\n/g, '\n')
-        }
-      });
-      console.log('✅ Google Cloud Speech client initialized');
+      try {
+        this.client = new SpeechClient({
+          projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
+          credentials: {
+            client_email: process.env.GOOGLE_CLOUD_CLIENT_EMAIL,
+            private_key: process.env.GOOGLE_CLOUD_PRIVATE_KEY?.replace(/\\n/g, '\n')
+          }
+        });
+        console.log('✅ Google Cloud Speech client initialized');
+      } catch (error) {
+        console.error('❌ Failed to initialize Google Cloud Speech client:', error);
+        this.client = null;
+      }
     } else {
-      console.warn('⚠️ Google Cloud Speech not configured');
+      console.warn('⚠️ Google Cloud Speech not configured - missing GOOGLE_CLOUD_PROJECT_ID');
+      this.client = null;
     }
   }
 
@@ -22,6 +28,8 @@ export class GoogleCloudSpeechService {
     }
 
     try {
+      console.log('🔄 Google Speech: Processing audio buffer of size:', audioBuffer.length); // Debug log
+      
       // Convert audio format mapping
       const formatMapping = {
         'webm': 'WEBM_OPUS',
@@ -30,12 +38,15 @@ export class GoogleCloudSpeechService {
         'flac': 'FLAC'
       };
 
+      const encoding = formatMapping[audioFormat] || 'WEBM_OPUS';
+      console.log('🎵 Using encoding:', encoding, 'for format:', audioFormat); // Debug log
+
       const request = {
         audio: {
           content: audioBuffer.toString('base64')
         },
         config: {
-          encoding: formatMapping[audioFormat] || 'WEBM_OPUS',
+          encoding: encoding,
           sampleRateHertz: 16000,
           languageCode: language,
           alternativeLanguageCodes: ['en-US', 'fa-IR', 'ar-SA'],
@@ -57,11 +68,26 @@ export class GoogleCloudSpeechService {
         }
       };
 
-      console.log(`🎤 Google Speech: Processing ${audioBuffer.length} bytes of ${audioFormat} audio`);
+      console.log('📤 Sending request to Google Speech API with config:', {
+        encoding: request.config.encoding,
+        sampleRateHertz: request.config.sampleRateHertz,
+        languageCode: request.config.languageCode,
+        audioSize: audioBuffer.length
+      }); // Debug log
 
       const [response] = await this.client.recognize(request);
       
+      console.log('📥 Google Speech API response:', {
+        resultsCount: response.results?.length || 0,
+        results: response.results?.map(r => ({
+          alternatives: r.alternatives?.length || 0,
+          transcript: r.alternatives?.[0]?.transcript || '',
+          confidence: r.alternatives?.[0]?.confidence || 0
+        })) || []
+      }); // Debug log
+      
       if (!response.results || response.results.length === 0) {
+        console.log('⚠️ No results from Google Speech API'); // Debug log
         return {
           transcript: '',
           confidence: 0,
@@ -72,14 +98,23 @@ export class GoogleCloudSpeechService {
       const result = response.results[0];
       const alternative = result.alternatives[0];
       
-      return {
+      const finalResult = {
         transcript: alternative.transcript || '',
         confidence: alternative.confidence || 0,
         detectedLanguage: result.languageCode || language
       };
+      
+      console.log('✅ Google Speech final result:', finalResult); // Debug log
+      
+      return finalResult;
 
     } catch (error) {
       console.error('❌ Google Speech transcription error:', error);
+      console.error('❌ Error details:', {
+        message: error.message,
+        code: error.code,
+        details: error.details
+      }); // Debug log
       throw new Error(`Google Speech API error: ${error.message}`);
     }
   }

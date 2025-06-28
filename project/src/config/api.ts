@@ -47,13 +47,12 @@ const getWebSocketUrl = () => {
 
 export const WS_BASE_URL = getWebSocketUrl();
 
-// Default headers for API requests
+// Default headers for API requests (excluding Content-Type for FormData)
 export const DEFAULT_HEADERS = {
-  'Content-Type': 'application/json',
   'Accept': 'application/json',
 } as const;
 
-// API request helper function
+// API request helper function with smart Content-Type handling
 export const apiRequest = async (endpoint: string, options?: RequestInit): Promise<Response> => {
   const url = `${API_BASE_URL}${endpoint}`;
   
@@ -64,6 +63,15 @@ export const apiRequest = async (endpoint: string, options?: RequestInit): Promi
     },
   };
 
+  // Smart Content-Type handling: Don't set Content-Type for FormData
+  // Let the browser set it automatically with proper boundary
+  if (!(options?.body instanceof FormData)) {
+    defaultOptions.headers = {
+      'Content-Type': 'application/json',
+      ...defaultOptions.headers,
+    };
+  }
+
   const finalOptions = {
     ...defaultOptions,
     ...options,
@@ -72,6 +80,13 @@ export const apiRequest = async (endpoint: string, options?: RequestInit): Promi
       ...options?.headers,
     },
   };
+
+  console.log('📤 API Request:', {
+    url,
+    method: finalOptions.method || 'GET',
+    headers: finalOptions.headers,
+    bodyType: finalOptions.body?.constructor.name || 'none'
+  }); // Debug log
 
   return fetch(url, finalOptions);
 };

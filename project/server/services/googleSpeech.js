@@ -142,7 +142,7 @@ export class GoogleCloudSpeechService {
       const request = {
         config: {
           encoding: 'WEBM_OPUS',
-          // Remove sampleRateHertz for streaming as well
+          sampleRateHertz: 48000,
           languageCode: isPersian ? 'fa-IR' : language,
           alternativeLanguageCodes: isPersian ? ['en-US'] : ['en-US', 'fa-IR'],
           enableAutomaticPunctuation: true,

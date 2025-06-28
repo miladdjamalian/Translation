@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Mic, MicOff, Zap, Target, Cloud, Server } from 'lucide-react';
+import { Mic, MicOff, Zap, Target, Cloud, Server, AlertTriangle } from 'lucide-react';
 import AudioVisualizer from './AudioVisualizer';
 import LanguageSelector from './LanguageSelector';
 import AudioDeviceSelector from './AudioDeviceSelector';
@@ -18,6 +18,7 @@ const CloudAudioTranslator: React.FC = () => {
   const [targetLanguage, setTargetLanguage] = useState('en');
   const [selectedMicrophone, setSelectedMicrophone] = useState('');
   const [selectedSpeaker, setSelectedSpeaker] = useState('');
+  // ✅ تغییر کلیدی: پیش‌فرض را روی Google قرار دادیم
   const [speechProvider, setSpeechProvider] = useState<'google' | 'azure'>('google');
   const [translationProvider, setTranslationProvider] = useState<'google' | 'azure'>('google');
   const [latencyMode, setLatencyMode] = useState<'low' | 'high'>('low');
@@ -286,6 +287,20 @@ const CloudAudioTranslator: React.FC = () => {
         </div>
       )}
 
+      {/* Azure Warning Banner */}
+      <div className="rounded-lg p-4 border bg-amber-900 border-amber-600 text-amber-200">
+        <div className="flex items-center space-x-2">
+          <AlertTriangle className="w-5 h-5" />
+          <div>
+            <span className="font-medium">توجه: </span>
+            <span>
+              Azure Speech در این محیط به دلیل محدودیت‌های فنی (نیاز به FFmpeg) پشتیبانی نمی‌شود. 
+              لطفاً از Google Speech استفاده کنید که بهینه‌سازی شده و کاملاً کار می‌کند.
+            </span>
+          </div>
+        </div>
+      </div>
+
       {/* Main Control Panel */}
       <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
@@ -338,11 +353,9 @@ const CloudAudioTranslator: React.FC = () => {
                 </button>
                 <button
                   onClick={() => setSpeechProvider('azure')}
-                  className={`flex-1 flex items-center justify-center space-x-1 px-2 py-2 rounded-md text-xs font-medium transition-all ${
-                    speechProvider === 'azure'
-                      ? 'bg-blue-600 text-white shadow'
-                      : 'text-gray-400 hover:text-white'
-                  }`}
+                  disabled={true}
+                  className="flex-1 flex items-center justify-center space-x-1 px-2 py-2 rounded-md text-xs font-medium transition-all text-gray-500 cursor-not-allowed bg-gray-800"
+                  title="Azure Speech در این محیط پشتیبانی نمی‌شود"
                 >
                   <Cloud className="w-3 h-3" />
                   <span>Azure</span>
@@ -519,20 +532,20 @@ const CloudAudioTranslator: React.FC = () => {
       {/* Cloud Features Info */}
       <div className="bg-gray-800 rounded-xl p-4 border border-gray-700">
         <div className="text-sm text-gray-400 space-y-2">
-          <h4 className="text-white font-medium">☁️ سیستم ترجمه ابری پیشرفته:</h4>
+          <h4 className="text-white font-medium">☁️ سیستم ترجمه ابری بهینه‌شده:</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <p>• <strong>Google Cloud Speech-to-Text:</strong> دقت بالا برای زبان فارسی</p>
-              <p>• <strong>Microsoft Azure Speech:</strong> تشخیص گفتار سازمانی</p>
+              <p>• <strong>Google Cloud Speech-to-Text:</strong> بهینه‌شده برای زبان فارسی با نرخ نمونه‌برداری 48kHz</p>
+              <p>• <strong>مدل پیش‌فرض:</strong> سازگاری کامل با زبان فارسی</p>
             </div>
             <div>
-              <p>• <strong>Google Cloud Translation:</strong> ترجمه ماشینی عصبی</p>
-              <p>• <strong>Azure Translator:</strong> ترجمه حرفه‌ای بلادرنگ</p>
+              <p>• <strong>Google Cloud Translation:</strong> ترجمه ماشینی عصبی با دقت بالا</p>
+              <p>• <strong>پردازش بلادرنگ:</strong> تنظیمات بهینه برای کمترین تأخیر</p>
             </div>
           </div>
           <div className="mt-4 p-3 bg-gray-900 rounded-lg">
             <p className="text-xs text-gray-500">
-              <strong>تنظیمات مورد نیاز:</strong> کلیدهای API خود را در فایل .env پیکربندی کنید و سرور backend را با 'npm run server' راه‌اندازی کنید
+              <strong>✅ تنظیمات بهینه‌شده:</strong> نرخ نمونه‌برداری 48kHz، کدک Opus، مدل پیش‌فرض برای فارسی
             </p>
             <p className="text-xs text-gray-500 mt-1">
               <strong>Backend URL:</strong> {API_BASE_URL}

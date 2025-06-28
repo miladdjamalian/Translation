@@ -140,4 +140,9 @@ server.listen(PORT, () => {
   console.log(`  - Google Cloud: ${!!process.env.GOOGLE_CLOUD_PROJECT_ID ? '✅' : '❌'}`);
   console.log(`  - Azure Speech: ${!!process.env.AZURE_SPEECH_KEY ? '✅' : '❌'}`);
   console.log(`  - Azure Translator: ${!!process.env.AZURE_TRANSLATOR_KEY ? '✅' : '❌'}`);
+// Root route for base URL
+app.get('/', (req, res) => {
+  res.send('🎧 Translation Backend is Live!');
+});
+
 });

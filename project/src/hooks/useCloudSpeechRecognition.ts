@@ -149,6 +149,7 @@ export const useCloudSpeechRecognition = (language: string, provider: 'google' |
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
+          sample rate: 48000,
           channelCount: 1 // تک کانال برای بهینه‌سازی حجم
         }
       });

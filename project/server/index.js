@@ -140,3 +140,4 @@ server.listen(PORT, () => {
 app.get('/', (req, res) => {
   res.send('🎧 Translation Backend is Live!');
 });
+});

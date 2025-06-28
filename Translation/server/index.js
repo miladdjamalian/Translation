@@ -13,7 +13,7 @@ const app = express();
 const server = createServer(app);
 const wss = new WebSocketServer({ server });
 
-// Middleware
+// === Middleware ===
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:5173',
   credentials: true
@@ -21,22 +21,19 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Configure multer for audio uploads
+// === Multer (برای فایل صوتی) ===
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB limit
-  }
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB
 });
 
-// Routes
-app.use('/api/speech', upload.single('audio'), speechRoutes);
-app.use('/api/translation', translationRoutes);
-
-// Health check
+// === Routes ===
+app.get('/', (req, res) => {
+  res.send('🎧 Translation Backend is Live!');
+});
 app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
+  res.json({
+    status: 'OK',
     timestamp: new Date().toISOString(),
     services: {
       googleCloud: !!process.env.GOOGLE_CLOUD_PROJECT_ID,
@@ -45,22 +42,21 @@ app.get('/health', (req, res) => {
     }
   });
 });
+app.use('/api/speech', upload.single('audio'), speechRoutes);
+app.use('/api/translation', translationRoutes);
 
-// WebSocket for real-time audio streaming
+// === WebSocket ===
 wss.on('connection', (ws) => {
-  console.log('🔌 New WebSocket connection established');
-  
-  ws.on('message', async (message) => {
+  console.log('🔌 WebSocket connection opened');
+
+  ws.on('message', (message) => {
     try {
       const data = JSON.parse(message);
-      
+
       if (data.type === 'audio-chunk') {
-        // Handle real-time audio streaming for speech recognition
-        // This will be implemented in the speech service
         const { audioData, language, sessionId } = data;
-        
-        // Process audio chunk and send back transcript
-        // Implementation will be added in speech service
+
+        // پاسخ فرضی (بعداً با AI جایگزین می‌کنی)
         ws.send(JSON.stringify({
           type: 'transcript',
           sessionId,
@@ -68,26 +64,24 @@ wss.on('connection', (ws) => {
           isFinal: false
         }));
       }
-    } catch (error) {
-      console.error('WebSocket message error:', error);
+    } catch (err) {
+      console.error('WebSocket error:', err);
       ws.send(JSON.stringify({
         type: 'error',
-        message: 'Failed to process audio'
+        message: 'Invalid message format or processing error'
       }));
     }
   });
-  
+
   ws.on('close', () => {
     console.log('🔌 WebSocket connection closed');
   });
 });
 
+// === Start Server ===
 const PORT = process.env.PORT || 3001;
-
 server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📡 WebSocket server ready for real-time audio`);
-  console.log(`🌐 Frontend URL: ${process.env.FRONTEND_URL}`);
-  app.get('/', (req, res) => {
-  res.send('🎧 Translation Backend is Live!');
+  console.log(`📡 WebSocket ready`);
+  console.log(`🌐 Frontend: ${process.env.FRONTEND_URL}`);
 });

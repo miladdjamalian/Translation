@@ -21,17 +21,22 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Configure multer for audio uploads
+// Multer config for file uploads
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB limit
+    fileSize: 10 * 1024 * 1024 // 10MB
   }
 });
 
 // Routes
 app.use('/api/speech', upload.single('audio'), speechRoutes);
 app.use('/api/translation', translationRoutes);
+
+// ✅ Fix: root path response
+app.get('/', (req, res) => {
+  res.send('🎧 Translation Backend is Live!');
+});
 
 // Health check
 app.get('/health', (req, res) => {
@@ -46,21 +51,15 @@ app.get('/health', (req, res) => {
   });
 });
 
-// WebSocket for real-time audio streaming
+// WebSocket setup
 wss.on('connection', (ws) => {
-  console.log('🔌 New WebSocket connection established');
-  
+  console.log('🔌 WebSocket connection established');
+
   ws.on('message', async (message) => {
     try {
       const data = JSON.parse(message);
-      
       if (data.type === 'audio-chunk') {
-        // Handle real-time audio streaming for speech recognition
-        // This will be implemented in the speech service
         const { audioData, language, sessionId } = data;
-        
-        // Process audio chunk and send back transcript
-        // Implementation will be added in speech service
         ws.send(JSON.stringify({
           type: 'transcript',
           sessionId,
@@ -69,23 +68,22 @@ wss.on('connection', (ws) => {
         }));
       }
     } catch (error) {
-      console.error('WebSocket message error:', error);
+      console.error('WebSocket error:', error);
       ws.send(JSON.stringify({
         type: 'error',
         message: 'Failed to process audio'
       }));
     }
   });
-  
+
   ws.on('close', () => {
     console.log('🔌 WebSocket connection closed');
   });
 });
 
 const PORT = process.env.PORT || 3001;
-
 server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📡 WebSocket server ready for real-time audio`);
-  console.log(`🌐 Frontend URL: ${process.env.FRONTEND_URL}`);
+  console.log(`📡 WebSocket server ready`);
+  console.log(`🌐 FRONTEND_URL: ${process.env.FRONTEND_URL}`);
 });

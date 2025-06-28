@@ -35,18 +35,21 @@ export const useAudioProcessor = (deviceId?: string) => {
     try {
       console.log('🎤 Starting recording with device:', deviceId); // Debug log
       
+      // ✅ تغییر کلیدی: نرخ نمونه‌برداری را به 48000 هرتز تغییر دادیم
+      // این تغییر تضمین می‌کند که تمام قسمت‌های سیستم از یک نرخ نمونه‌برداری استفاده کنند
       const constraints: MediaStreamConstraints = {
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
-          sampleRate: 16000,
+          sampleRate: 48000, // 🔧 تغییر از 16000 به 48000 برای سازگاری با Opus
+          channelCount: 1, // تک کانال برای بهینه‌سازی
           ...(deviceId && { deviceId: { exact: deviceId } })
         }
       };
 
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      console.log('✅ Microphone stream obtained:', stream, 'tracks:', stream.getAudioTracks().length); // Debug log
+      console.log('✅ Microphone stream obtained with 48kHz:', stream, 'tracks:', stream.getAudioTracks().length); // Debug log
       
       streamRef.current = stream;
       
@@ -74,7 +77,7 @@ export const useAudioProcessor = (deviceId?: string) => {
       mediaRecorderRef.current.start();
       setIsRecordingActive(true);
       
-      console.log('🔴 MediaRecorder started'); // Debug log
+      console.log('🔴 MediaRecorder started with 48kHz sample rate'); // Debug log
       
       // Start audio analysis
       analyzeAudio();

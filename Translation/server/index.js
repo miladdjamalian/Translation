@@ -88,4 +88,6 @@ server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📡 WebSocket server ready for real-time audio`);
   console.log(`🌐 Frontend URL: ${process.env.FRONTEND_URL}`);
+  app.get('/', (req, res) => {
+  res.send('🎧 Translation Backend is Live!');
 });

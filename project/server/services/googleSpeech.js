@@ -28,7 +28,7 @@ export class GoogleCloudSpeechService {
     }
 
     try {
-      console.log('🔄 Google Speech: Processing audio buffer of size:', audioBuffer.length); // Debug log
+      console.log('🔄 Google Speech: Processing audio buffer of size:', audioBuffer.length);
       
       // Convert audio format mapping
       const formatMapping = {
@@ -39,29 +39,34 @@ export class GoogleCloudSpeechService {
       };
 
       const encoding = formatMapping[audioFormat] || 'WEBM_OPUS';
-      console.log('🎵 Using encoding:', encoding, 'for format:', audioFormat); // Debug log
+      console.log('🎵 Using encoding:', encoding, 'for format:', audioFormat);
 
+      // For Persian language, use simpler configuration to avoid model compatibility issues
+      const isPersian = language === 'fa-IR' || language === 'fa';
+      
       const request = {
         audio: {
           content: audioBuffer.toString('base64')
         },
         config: {
           encoding: encoding,
-          sampleRateHertz: 16000,
-          languageCode: language,
-          alternativeLanguageCodes: ['en-US', 'fa-IR', 'ar-SA'],
+          // Remove sampleRateHertz to let Google auto-detect from WEBM header
+          // This fixes the "sample_rate_hertz 16000 must match WEBM OPUS header 48000" error
+          languageCode: isPersian ? 'fa-IR' : language,
+          alternativeLanguageCodes: isPersian ? ['en-US'] : ['en-US', 'fa-IR'],
           enableAutomaticPunctuation: true,
           enableWordTimeOffsets: false,
-          model: 'latest_long', // Best model for accuracy
-          useEnhanced: true, // Use enhanced model if available
+          // Use basic model for Persian to avoid "model not supported" error
+          model: isPersian ? 'default' : 'latest_long',
+          // Disable enhanced model for Persian to avoid compatibility issues
+          useEnhanced: !isPersian,
           profanityFilter: false,
           speechContexts: [{
-            phrases: [
-              // Persian common phrases
-              'سلام', 'خداحافظ', 'متشکرم', 'ممنون', 'لطفاً', 'ببخشید',
-              // Arabic common phrases  
-              'السلام عليكم', 'شكرا', 'من فضلك', 'عفوا',
-              // English common phrases
+            phrases: isPersian ? [
+              // Persian common phrases only
+              'سلام', 'خداحافظ', 'متشکرم', 'ممنون', 'لطفاً', 'ببخشید'
+            ] : [
+              // English and other languages
               'hello', 'goodbye', 'thank you', 'please', 'excuse me'
             ]
           }]
@@ -70,10 +75,11 @@ export class GoogleCloudSpeechService {
 
       console.log('📤 Sending request to Google Speech API with config:', {
         encoding: request.config.encoding,
-        sampleRateHertz: request.config.sampleRateHertz,
         languageCode: request.config.languageCode,
+        model: request.config.model,
+        useEnhanced: request.config.useEnhanced,
         audioSize: audioBuffer.length
-      }); // Debug log
+      });
 
       const [response] = await this.client.recognize(request);
       
@@ -84,10 +90,10 @@ export class GoogleCloudSpeechService {
           transcript: r.alternatives?.[0]?.transcript || '',
           confidence: r.alternatives?.[0]?.confidence || 0
         })) || []
-      }); // Debug log
+      });
       
       if (!response.results || response.results.length === 0) {
-        console.log('⚠️ No results from Google Speech API'); // Debug log
+        console.log('⚠️ No results from Google Speech API');
         return {
           transcript: '',
           confidence: 0,
@@ -104,7 +110,7 @@ export class GoogleCloudSpeechService {
         detectedLanguage: result.languageCode || language
       };
       
-      console.log('✅ Google Speech final result:', finalResult); // Debug log
+      console.log('✅ Google Speech final result:', finalResult);
       
       return finalResult;
 
@@ -114,7 +120,13 @@ export class GoogleCloudSpeechService {
         message: error.message,
         code: error.code,
         details: error.details
-      }); // Debug log
+      });
+      
+      // If Persian language fails with model error, suggest using Azure instead
+      if (error.message.includes('not supported for language') && language.includes('fa')) {
+        throw new Error('Google Speech API does not fully support Persian language with advanced models. Please use Azure Speech for Persian.');
+      }
+      
       throw new Error(`Google Speech API error: ${error.message}`);
     }
   }
@@ -125,15 +137,17 @@ export class GoogleCloudSpeechService {
     }
 
     try {
+      const isPersian = language === 'fa-IR' || language === 'fa';
+      
       const request = {
         config: {
           encoding: 'WEBM_OPUS',
-          sampleRateHertz: 16000,
-          languageCode: language,
-          alternativeLanguageCodes: ['en-US', 'fa-IR', 'ar-SA'],
+          // Remove sampleRateHertz for streaming as well
+          languageCode: isPersian ? 'fa-IR' : language,
+          alternativeLanguageCodes: isPersian ? ['en-US'] : ['en-US', 'fa-IR'],
           enableAutomaticPunctuation: true,
-          model: 'latest_long',
-          useEnhanced: true
+          model: isPersian ? 'default' : 'latest_long',
+          useEnhanced: !isPersian
         },
         interimResults: true,
         singleUtterance: false

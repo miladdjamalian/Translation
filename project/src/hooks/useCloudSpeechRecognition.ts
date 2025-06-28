@@ -142,16 +142,19 @@ export const useCloudSpeechRecognition = (language: string, provider: 'google' |
     try {
       console.log('🎤 Starting cloud speech recognition for language:', getLanguageCode(language), 'provider:', provider); // Debug log
       
+      // ✅ تغییر کلیدی: نرخ نمونه‌برداری را به 48000 هرتز تغییر دادیم
+      // این تغییر تضمین می‌کند که نرخ نمونه‌برداری میکروفون با کدک Opus مطابقت داشته باشد
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
-          sampleRate: 16000
+          sampleRate: 48000, // 🔧 تغییر از 16000 به 48000 برای سازگاری با Opus
+          channelCount: 1 // تک کانال برای بهینه‌سازی حجم
         }
       });
       
-      console.log('✅ Got media stream for speech recognition:', stream); // Debug log
+      console.log('✅ Got media stream for speech recognition with 48kHz sample rate:', stream); // Debug log
       
       streamRef.current = stream;
       sessionIdRef.current = Date.now().toString();
@@ -203,7 +206,7 @@ export const useCloudSpeechRecognition = (language: string, provider: 'google' |
         setTranscript('');
         setInterimTranscript('');
         accumulatedTranscriptRef.current = '';
-        console.log(`🔴 ${provider} Speech recognition started`);
+        console.log(`🔴 ${provider} Speech recognition started with 48kHz sample rate`);
       };
       
       mediaRecorder.onstop = () => {

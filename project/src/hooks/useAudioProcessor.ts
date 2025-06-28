@@ -1,99 +1,120 @@
-import { useEffect, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 
-interface AudioProcessorOptions {
-  onStart?: () => void;
-  onStop?: () => void;
-  onVolumeChange?: (volume: number) => void;
-  isActive: boolean;
-  socket: WebSocket;
-  sessionId: string;
-  language: string;
-}
-
-export default function useAudioProcessor({
-  onStart,
-  onStop,
-  onVolumeChange,
-  isActive,
-  socket,
-  sessionId,
-  language
-}: AudioProcessorOptions) {
+export const useAudioProcessor = (deviceId?: string) => {
+  const [audioLevel, setAudioLevel] = useState(0);
+  const [isRecordingActive, setIsRecordingActive] = useState(false);
+  
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
-  const dataArrayRef = useRef<Uint8Array | null>(null);
-  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const animationFrameIdRef = useRef<number | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const animationFrameRef = useRef<number>();
 
-  useEffect(() => {
-    if (!isActive) return;
+  const analyzeAudio = useCallback(() => {
+    if (!analyserRef.current) return;
 
-    let audioContext: AudioContext;
-    let analyser: AnalyserNode;
-    let dataArray: Uint8Array;
+    const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
+    analyserRef.current.getByteFrequencyData(dataArray);
+    
+    console.log('🔊 Audio data array sample:', dataArray.slice(0, 10)); // Debug log
+    
+    // Calculate average volume
+    const average = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
+    const normalizedLevel = Math.min(average / 128, 1);
+    
+    console.log('📊 Audio level calculated:', normalizedLevel, 'from average:', average); // Debug log
+    
+    setAudioLevel(normalizedLevel);
+    
+    if (isRecordingActive) {
+      animationFrameRef.current = requestAnimationFrame(analyzeAudio);
+    }
+  }, [isRecordingActive]);
 
-    const handleSuccess = async (stream: MediaStream) => {
-      audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      analyser = audioContext.createAnalyser();
-      const source = audioContext.createMediaStreamSource(stream);
-      source.connect(analyser);
-      analyser.fftSize = 256;
-      const bufferLength = analyser.frequencyBinCount;
-      dataArray = new Uint8Array(bufferLength);
-
-      audioContextRef.current = audioContext;
-      analyserRef.current = analyser;
-      dataArrayRef.current = dataArray;
-      sourceRef.current = source;
-
-      // Setup MediaRecorder
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm'
-      });
-      mediaRecorderRef.current = mediaRecorder;
-
-      mediaRecorder.ondataavailable = (event: BlobEvent) => {
-        if (event.data.size > 0) {
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            const audioBase64 = reader.result?.toString().split(',')[1];
-            if (audioBase64 && socket.readyState === WebSocket.OPEN) {
-              socket.send(JSON.stringify({
-                type: 'audio-chunk',
-                audioData: audioBase64,
-                language,
-                sessionId,
-              }));
-            }
-          };
-          reader.readAsDataURL(event.data);
+  const startRecording = useCallback(async () => {
+    try {
+      console.log('🎤 Starting recording with device:', deviceId); // Debug log
+      
+      const constraints: MediaStreamConstraints = {
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 16000,
+          ...(deviceId && { deviceId: { exact: deviceId } })
         }
       };
 
-      mediaRecorder.start(500);
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      console.log('✅ Microphone stream obtained:', stream, 'tracks:', stream.getAudioTracks().length); // Debug log
+      
+      streamRef.current = stream;
+      
+      // Set up audio analysis
+      audioContextRef.current = new AudioContext();
+      analyserRef.current = audioContextRef.current.createAnalyser();
+      analyserRef.current.fftSize = 256;
+      
+      const source = audioContextRef.current.createMediaStreamSource(stream);
+      source.connect(analyserRef.current);
+      
+      console.log('🔗 Audio context and analyser connected'); // Debug log
+      
+      // Set up media recorder
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
+        ? 'audio/webm;codecs=opus' 
+        : 'audio/webm';
+      
+      console.log('🎵 Using MIME type:', mimeType); // Debug log
+      
+      mediaRecorderRef.current = new MediaRecorder(stream, {
+        mimeType: mimeType
+      });
+      
+      mediaRecorderRef.current.start();
+      setIsRecordingActive(true);
+      
+      console.log('🔴 MediaRecorder started'); // Debug log
+      
+      // Start audio analysis
+      analyzeAudio();
+      
+    } catch (error) {
+      console.error('❌ Error starting recording:', error);
+      throw error;
+    }
+  }, [analyzeAudio, deviceId]);
 
-      const tick = () => {
-        if (!analyser || !dataArray || !onVolumeChange) return;
-        analyser.getByteFrequencyData(dataArray);
-        const volume = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
-        onVolumeChange(volume);
-        animationFrameIdRef.current = requestAnimationFrame(tick);
-      };
+  const stopRecording = useCallback(() => {
+    console.log('🛑 Stopping recording'); // Debug log
+    
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => {
+        track.stop();
+        console.log('🔇 Audio track stopped:', track.label); // Debug log
+      });
+    }
+    
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      audioContextRef.current.close();
+    }
+    
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+    
+    setIsRecordingActive(false);
+    setAudioLevel(0);
+  }, []);
 
-      tick();
-      onStart?.();
-    };
-
-    navigator.mediaDevices.getUserMedia({ audio: true }).then(handleSuccess);
-
-    return () => {
-      animationFrameIdRef.current && cancelAnimationFrame(animationFrameIdRef.current);
-      analyserRef.current?.disconnect();
-      sourceRef.current?.disconnect();
-      audioContextRef.current?.close();
-      mediaRecorderRef.current?.stop();
-      onStop?.();
-    };
-  }, [isActive]);
-}
+  return {
+    startRecording,
+    stopRecording,
+    audioLevel,
+    isRecordingActive
+  };
+};

@@ -149,7 +149,7 @@ export const useCloudSpeechRecognition = (language: string, provider: 'google' |
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
-          sample rate: 48000,
+          sampleRate: 48000, // 🔧 تغییر از 16000 به 48000 برای سازگاری با Opus
           channelCount: 1 // تک کانال برای بهینه‌سازی حجم
         }
       });

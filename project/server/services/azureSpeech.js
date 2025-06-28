@@ -3,18 +3,24 @@ import * as sdk from 'microsoft-cognitiveservices-speech-sdk';
 export class AzureSpeechService {
   constructor() {
     if (process.env.AZURE_SPEECH_KEY && process.env.AZURE_SPEECH_REGION) {
-      this.speechConfig = sdk.SpeechConfig.fromSubscription(
-        process.env.AZURE_SPEECH_KEY,
-        process.env.AZURE_SPEECH_REGION
-      );
-      
-      // Configure for best quality
-      this.speechConfig.speechRecognitionLanguage = 'fa-IR';
-      this.speechConfig.outputFormat = sdk.OutputFormat.Detailed;
-      
-      console.log('✅ Azure Speech client initialized');
+      try {
+        this.speechConfig = sdk.SpeechConfig.fromSubscription(
+          process.env.AZURE_SPEECH_KEY,
+          process.env.AZURE_SPEECH_REGION
+        );
+        
+        // Configure for best quality
+        this.speechConfig.speechRecognitionLanguage = 'fa-IR';
+        this.speechConfig.outputFormat = sdk.OutputFormat.Detailed;
+        
+        console.log('✅ Azure Speech client initialized');
+      } catch (error) {
+        console.error('❌ Failed to initialize Azure Speech client:', error);
+        this.speechConfig = null;
+      }
     } else {
-      console.warn('⚠️ Azure Speech not configured');
+      console.warn('⚠️ Azure Speech not configured - missing AZURE_SPEECH_KEY or AZURE_SPEECH_REGION');
+      this.speechConfig = null;
     }
   }
 
@@ -24,6 +30,8 @@ export class AzureSpeechService {
     }
 
     try {
+      console.log('🔄 Azure Speech: Processing audio buffer of size:', audioBuffer.length); // Debug log
+      
       // Set language
       this.speechConfig.speechRecognitionLanguage = language;
       
@@ -38,19 +46,29 @@ export class AzureSpeechService {
       return new Promise((resolve, reject) => {
         recognizer.recognizeOnceAsync(
           (result) => {
+            console.log('📥 Azure Speech API result:', {
+              reason: result.reason,
+              text: result.text,
+              resultId: result.resultId
+            }); // Debug log
+            
             if (result.reason === sdk.ResultReason.RecognizedSpeech) {
-              resolve({
+              const finalResult = {
                 transcript: result.text || '',
                 confidence: result.properties?.getProperty(sdk.PropertyId.SpeechServiceResponse_JsonResult) ? 0.9 : 0.7,
                 detectedLanguage: language
-              });
+              };
+              console.log('✅ Azure Speech final result:', finalResult); // Debug log
+              resolve(finalResult);
             } else if (result.reason === sdk.ResultReason.NoMatch) {
+              console.log('⚠️ Azure Speech: No match found'); // Debug log
               resolve({
                 transcript: '',
                 confidence: 0,
                 detectedLanguage: language
               });
             } else {
+              console.error('❌ Azure Speech recognition failed:', result.errorDetails); // Debug log
               reject(new Error(`Azure Speech recognition failed: ${result.errorDetails}`));
             }
             recognizer.close();

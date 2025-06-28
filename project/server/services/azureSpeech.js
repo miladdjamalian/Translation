@@ -1,11 +1,4 @@
 import * as sdk from 'microsoft-cognitiveservices-speech-sdk';
-import ffmpeg from 'fluent-ffmpeg';
-import ffmpegStatic from 'ffmpeg-static';
-import { Readable } from 'stream';
-import { promisify } from 'util';
-
-// Set ffmpeg path
-ffmpeg.setFfmpegPath(ffmpegStatic);
 
 export class AzureSpeechService {
   constructor() {
@@ -31,37 +24,6 @@ export class AzureSpeechService {
     }
   }
 
-  async convertWebmToWav(webmBuffer) {
-    return new Promise((resolve, reject) => {
-      console.log('🔄 Converting WebM to WAV for Azure Speech API');
-      
-      const chunks = [];
-      const inputStream = new Readable();
-      inputStream.push(webmBuffer);
-      inputStream.push(null);
-
-      ffmpeg(inputStream)
-        .inputFormat('webm')
-        .audioCodec('pcm_s16le')
-        .audioFrequency(16000)
-        .audioChannels(1)
-        .format('wav')
-        .on('error', (err) => {
-          console.error('❌ FFmpeg conversion error:', err);
-          reject(new Error(`Audio conversion failed: ${err.message}`));
-        })
-        .on('end', () => {
-          console.log('✅ WebM to WAV conversion completed');
-          const wavBuffer = Buffer.concat(chunks);
-          resolve(wavBuffer);
-        })
-        .pipe()
-        .on('data', (chunk) => {
-          chunks.push(chunk);
-        });
-    });
-  }
-
   async transcribeAudio(audioBuffer, language = 'fa-IR', audioFormat = 'webm') {
     if (!this.speechConfig) {
       throw new Error('Azure Speech client not initialized');
@@ -73,26 +35,21 @@ export class AzureSpeechService {
       // Set language
       this.speechConfig.speechRecognitionLanguage = language;
       
-      let processedBuffer = audioBuffer;
+      // Configure Azure Speech SDK to accept WebM/Opus directly
+      this.speechConfig.setProperty(sdk.PropertyId.SpeechServiceConnection_SingleLanguageId, language);
       
-      // Convert WebM to WAV if needed
-      if (audioFormat === 'webm') {
-        try {
-          processedBuffer = await this.convertWebmToWav(audioBuffer);
-          console.log('✅ Audio converted from WebM to WAV, new size:', processedBuffer.length);
-        } catch (conversionError) {
-          console.error('❌ Audio conversion failed:', conversionError);
-          throw new Error(`Audio format conversion failed: ${conversionError.message}`);
-        }
-      }
+      // Create push stream for direct audio input
+      const pushStream = sdk.AudioInputStream.createPushStream();
+      pushStream.write(audioBuffer);
+      pushStream.close();
       
-      // Create audio config from buffer
-      const audioConfig = sdk.AudioConfig.fromWavFileInput(processedBuffer);
+      // Create audio config from stream
+      const audioConfig = sdk.AudioConfig.fromStreamInput(pushStream);
       
       // Create recognizer
       const recognizer = new sdk.SpeechRecognizer(this.speechConfig, audioConfig);
       
-      console.log(`🎤 Azure Speech: Processing ${processedBuffer.length} bytes of converted audio`);
+      console.log(`🎤 Azure Speech: Processing ${audioBuffer.length} bytes of ${audioFormat} audio directly`);
 
       return new Promise((resolve, reject) => {
         recognizer.recognizeOnceAsync(

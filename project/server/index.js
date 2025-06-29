@@ -136,7 +136,6 @@ server.listen(PORT, () => {
   // Log Google Cloud service availability
   console.log('🔍 Service availability:');
   console.log(`  - Google Cloud: ${!!process.env.GOOGLE_CLOUD_PROJECT_ID ? '✅' : '❌'}`);
-});
   // Root route for base URL
 app.get('/', (req, res) => {
   res.send('🎧 Translation Backend is Live!');

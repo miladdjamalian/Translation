@@ -29,8 +29,7 @@ export class GoogleCloudSpeechService {
 
     try {
       console.log('🔄 Google Speech: Processing audio buffer of size:', audioBuffer.length);
-      
-      // Convert audio format mapping
+
       const formatMapping = {
         'webm': 'WEBM_OPUS',
         'wav': 'LINEAR16',
@@ -39,34 +38,26 @@ export class GoogleCloudSpeechService {
       };
 
       const encoding = formatMapping[audioFormat] || 'WEBM_OPUS';
-      console.log('🎵 Using encoding:', encoding, 'for format:', audioFormat);
-
-      // For Persian language, use simpler configuration to avoid model compatibility issues
       const isPersian = language === 'fa-IR' || language === 'fa';
-      
+
       const request = {
         audio: {
           content: audioBuffer.toString('base64')
         },
         config: {
-          encoding: 'WEBM_OPUS',
-    sampleRateHertz: 48000, // ✅ بسیار مهم
-    languageCode: language,
-    enableAutomaticPunctuation: true,
-    enableWordTimeOffsets: false,
-    model: 'default',
-    useEnhanced: false
-          // Use basic model for Persian to avoid "model not supported" error
+          encoding,
+          sampleRateHertz: 48000,
+          languageCode: isPersian ? 'fa-IR' : language,
+          alternativeLanguageCodes: isPersian ? ['en-US'] : ['en-US', 'fa-IR'],
+          enableAutomaticPunctuation: true,
+          enableWordTimeOffsets: false,
           model: isPersian ? 'default' : 'latest_long',
-          // Disable enhanced model for Persian to avoid compatibility issues
           useEnhanced: !isPersian,
           profanityFilter: false,
           speechContexts: [{
             phrases: isPersian ? [
-              // Persian common phrases only
               'سلام', 'خداحافظ', 'متشکرم', 'ممنون', 'لطفاً', 'ببخشید'
             ] : [
-              // English and other languages
               'hello', 'goodbye', 'thank you', 'please', 'excuse me'
             ]
           }]
@@ -82,7 +73,7 @@ export class GoogleCloudSpeechService {
       });
 
       const [response] = await this.client.recognize(request);
-      
+
       console.log('📥 Google Speech API response:', {
         resultsCount: response.results?.length || 0,
         results: response.results?.map(r => ({
@@ -91,7 +82,7 @@ export class GoogleCloudSpeechService {
           confidence: r.alternatives?.[0]?.confidence || 0
         })) || []
       });
-      
+
       if (!response.results || response.results.length === 0) {
         console.log('⚠️ No results from Google Speech API');
         return {
@@ -103,15 +94,14 @@ export class GoogleCloudSpeechService {
 
       const result = response.results[0];
       const alternative = result.alternatives[0];
-      
+
       const finalResult = {
         transcript: alternative.transcript || '',
         confidence: alternative.confidence || 0,
         detectedLanguage: result.languageCode || language
       };
-      
+
       console.log('✅ Google Speech final result:', finalResult);
-      
       return finalResult;
 
     } catch (error) {
@@ -121,12 +111,11 @@ export class GoogleCloudSpeechService {
         code: error.code,
         details: error.details
       });
-      
-      // If Persian language fails with model error, suggest using Azure instead
+
       if (error.message.includes('not supported for language') && language.includes('fa')) {
         throw new Error('Google Speech API does not fully support Persian language with advanced models. Please use Azure Speech for Persian.');
       }
-      
+
       throw new Error(`Google Speech API error: ${error.message}`);
     }
   }
@@ -138,7 +127,7 @@ export class GoogleCloudSpeechService {
 
     try {
       const isPersian = language === 'fa-IR' || language === 'fa';
-      
+
       const request = {
         config: {
           encoding: 'WEBM_OPUS',
@@ -163,11 +152,8 @@ export class GoogleCloudSpeechService {
             const transcript = data.results[0].alternatives[0].transcript;
             const isFinal = data.results[0].isFinal;
             const confidence = data.results[0].alternatives[0].confidence || 0;
-            
+
             console.log(`📝 Google Stream ${sessionId}: "${transcript}" (final: ${isFinal})`);
-            
-            // Send to WebSocket clients
-            // This will be handled by the WebSocket server
           }
         });
 

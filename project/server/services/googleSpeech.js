@@ -50,8 +50,7 @@ export class GoogleCloudSpeechService {
         },
         config: {
           encoding: encoding,
-          // Remove sampleRateHertz to let Google auto-detect from WEBM header
-          // This fixes the "sample_rate_hertz 16000 must match WEBM OPUS header 48000" error
+          sampleRateHertz: 48000,
           languageCode: isPersian ? 'fa-IR' : language,
           alternativeLanguageCodes: isPersian ? ['en-US'] : ['en-US', 'fa-IR'],
           enableAutomaticPunctuation: true,

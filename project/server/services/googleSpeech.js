@@ -49,12 +49,13 @@ export class GoogleCloudSpeechService {
           content: audioBuffer.toString('base64')
         },
         config: {
-          encoding: encoding,
-          sampleRateHertz: 48000,
-          languageCode: isPersian ? 'fa-IR' : language,
-          alternativeLanguageCodes: isPersian ? ['en-US'] : ['en-US', 'fa-IR'],
-          enableAutomaticPunctuation: true,
-          enableWordTimeOffsets: false,
+          encoding: 'WEBM_OPUS',
+    sampleRateHertz: 48000, // ✅ بسیار مهم
+    languageCode: language,
+    enableAutomaticPunctuation: true,
+    enableWordTimeOffsets: false,
+    model: 'default',
+    useEnhanced: false
           // Use basic model for Persian to avoid "model not supported" error
           model: isPersian ? 'default' : 'latest_long',
           // Disable enhanced model for Persian to avoid compatibility issues

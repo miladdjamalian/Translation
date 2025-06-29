@@ -1,3 +1,6 @@
+import multer from 'multer';
+const upload = multer({ storage: multer.memoryStorage() });
+
 import express from 'express';
 import { GoogleCloudSpeechService } from '../services/googleSpeech.js';
 
@@ -7,7 +10,8 @@ const router = express.Router();
 const googleSpeech = new GoogleCloudSpeechService();
 
 // Speech-to-Text endpoint
-router.post('/transcribe', async (req, res) => {
+router.post('/transcribe', upload.single('audio'), async (req, res) => {
+
   try {
     console.log('📥 Received /api/speech/transcribe request'); // Debug log
     console.log('📋 Request body keys:', Object.keys(req.body)); // Debug log

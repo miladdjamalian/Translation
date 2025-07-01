@@ -7,6 +7,7 @@ export const useSpeechSynthesis = (language: string, outputDeviceId?: string) =>
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const currentOutputDeviceRef = useRef<string>('');
+  const speechQueueRef = useRef<string[]>([]);
 
   const getLanguageCode = (lang: string) => {
     const languageCodes: Record<string, string> = {
@@ -82,14 +83,18 @@ export const useSpeechSynthesis = (language: string, outputDeviceId?: string) =>
     }
   }, []);
 
-  const speak = useCallback(async (text: string) => {
-    if (!text.trim()) return;
-    
-    // Stop any current speech immediately for real-time experience
+  const processQueue = useCallback(async () => {
+    if (isSpeaking || speechQueueRef.current.length === 0) {
+      return;
+    }
+
+    const text = speechQueueRef.current.shift();
+    if (!text) return;
+
     if (utteranceRef.current) {
       speechSynthesis.cancel();
     }
-    
+
     const utterance = new SpeechSynthesisUtterance(text);
     const targetLangCode = getLanguageCode(language);
     
@@ -130,19 +135,20 @@ export const useSpeechSynthesis = (language: string, outputDeviceId?: string) =>
     utterance.onstart = () => {
       setIsSpeaking(true);
     };
-    
+
     utterance.onend = () => {
       setIsSpeaking(false);
       utteranceRef.current = null;
+      processQueue();
     };
     
     utterance.onerror = (event) => {
-      // Only log errors that are not expected interruptions
       if (event.error !== 'interrupted') {
         console.error('Speech synthesis error:', event.error);
       }
       setIsSpeaking(false);
       utteranceRef.current = null;
+      processQueue();
     };
     
     utteranceRef.current = utterance;
@@ -161,7 +167,13 @@ export const useSpeechSynthesis = (language: string, outputDeviceId?: string) =>
     }
     
     speechSynthesis.speak(utterance);
-  }, [language, voices]);
+  }, [language, voices, isSpeaking]);
+
+  const speak = useCallback((text: string) => {
+    if (!text.trim()) return;
+    speechQueueRef.current.push(text);
+    processQueue();
+  }, [processQueue]);
 
   const stopSpeaking = useCallback(() => {
     speechSynthesis.cancel();

@@ -201,7 +201,7 @@ const AudioTranslator: React.FC = () => {
           
           // Speak only the new translation part with minimal delay
           setTimeout(() => {
-            if (newTranslation && sessionActiveRef.current && !isSpeaking) {
+            if (newTranslation && sessionActiveRef.current) {
               console.log('🔊 Speaking new translation:', newTranslation);
               speak(newTranslation);
             }
